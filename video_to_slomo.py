@@ -15,119 +15,21 @@ from tqdm import tqdm
 
 # For parsing commandline arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--ffmpeg_dir", type=str, default="", help='path to ffmpeg.exe')
-parser.add_argument("--video", type=str, required=True, help='path of video to be converted')
+parser.add_argument("--input_path", type=str, required=True, help='path of frames to be processed')
 parser.add_argument("--checkpoint", type=str, required=True, help='path of checkpoint for pretrained model')
-parser.add_argument("--fps", type=float, default=30, help='specify fps of output video. Default: 30.')
 parser.add_argument("--sf", type=int, required=True, help='specify the slomo factor N. This will increase the frames by Nx. Example sf=2 ==> 2x frames')
 parser.add_argument("--batch_size", type=int, default=1, help='Specify batch size for faster conversion. This will depend on your cpu/gpu memory. Default: 1')
-parser.add_argument("--output", type=str, default="output.mkv", help='Specify output file name. Default: output.mp4')
-parser.add_argument("--remove_duplicate", type=bool, default=False, help='Removes duplicate frames, if set to True.')
+parser.add_argument("--output", type=str, required=True, help='Specify output folder.')
 args = parser.parse_args()
 
-def check():
-    """
-    Checks the validity of commandline arguments.
-    Parameters
-    ----------
-        None
-    Returns
-    -------
-        error : string
-            Error message if error occurs otherwise blank string.
-    """
-
-
-    error = ""
-    if (args.sf < 2):
-        error = "Error: --sf/slomo factor has to be atleast 2"
-    if (args.batch_size < 1):
-        error = "Error: --batch_size has to be atleast 1"
-    if (args.fps < 1):
-        error = "Error: --fps has to be atleast 1"
-    #if ".mkv" not in args.output:
-    #    error = "output needs to have mkv container"
-    return error
-
-def extract_frames(video, outDir):
-    """
-    Converts the `video` to images.
-    Parameters
-    ----------
-        video : string
-            full path to the video file.
-        outDir : string
-            path to directory to output the extracted images.
-    Returns
-    -------
-        error : string
-            Error message if error occurs otherwise blank string.
-    """
-
-
-    error = ""
-    print('{} -i {} -vsync 0 {}/%06d.png'.format(os.path.join(args.ffmpeg_dir, "ffmpeg"), video, outDir))
-    retn = os.system('{} -i "{}" -vsync 0 {}/%06d.png'.format(os.path.join(args.ffmpeg_dir, "ffmpeg"), video, outDir))
-    if retn:
-        error = "Error converting file:{}. Exiting.".format(video)
-    return error
-
-def extract_frames_no_duplicate(video, outDir):
-    error = ""
-    print('{} -i {} -vf mpdecimate -vsync 0 {}/%06d.png'.format(os.path.join(args.ffmpeg_dir, "ffmpeg"), video, outDir))
-    retn = os.system('{} -i "{}" -vf mpdecimate -vsync 0 {}/%06d.png'.format(os.path.join(args.ffmpeg_dir, "ffmpeg"), video, outDir))
-    if retn:
-        error = "Error converting file:{}. Exiting.".format(video)
-    return error
 
 def main():
-
-    # Deleting old files, if they exist
-    file_extention = os.path.splitext(args.video)[1]
-    if os.path.exists("/content/input{file_extention}"):
-        os.remove("/content/input{file_extention}")
-    if os.path.exists("/content/output-audio.aac"):
-      os.remove("/content/output-audio.aac")
-
-    if os.path.exists("/content/Colab-Super-SloMo/extract"):
-      shutil.rmtree("/content/Colab-Super-SloMo/extract")
-    if os.path.exists("/content/Colab-Super-SloMo/tmp"):
-      shutil.rmtree("/content/Colab-Super-SloMo/tmp")
-
-    # Check if arguments are okay
-    error = check()
-    if error:
-        print(error)
-        exit(1)
-
-    # Create extraction folder and extract frames
-    IS_WINDOWS = 'Windows' == platform.system()
-    extractionDir = "tmpSuperSloMo"
-    if not IS_WINDOWS:
-        # Assuming UNIX-like system where "." indicates hidden directories
-        extractionDir = "." + extractionDir
-    if os.path.isdir(extractionDir):
-        rmtree(extractionDir)
-    os.mkdir(extractionDir)
-    if IS_WINDOWS:
-        FILE_ATTRIBUTE_HIDDEN = 0x02
-        # ctypes.windll only exists on Windows
-        ctypes.windll.kernel32.SetFileAttributesW(extractionDir, FILE_ATTRIBUTE_HIDDEN)
-
-    extractionPath = '/content/Colab-Super-SloMo/extract'
-    outputPath     = '/content/Colab-Super-SloMo/tmp'
-    os.mkdir(extractionPath)
-    os.mkdir(outputPath)
+    os.makedirs(args.output, exist_ok=True)
+    outputPath = args.output
     
-    if args.remove_duplicate == True:
-      error = extract_frames_no_duplicate(args.video, extractionPath)
-    else:
-      error = extract_frames(args.video, extractionPath)
-    
-
-    if error:
-        print(error)
-        exit(1)
+    if args.sf < 2:
+        print("Slowmo factor must be at least 2.")
+        return
 
     # Initialize transforms
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
